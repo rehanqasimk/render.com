@@ -4,15 +4,17 @@ const app = express();
 const port = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors()); // Enable CORS for all routes
+app.use(cors({
+  origin: ['http://localhost:5500', 'https://rehanqasim_render.surge.sh'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
 app.use(express.json());
 
 // Root endpoint - return basic API info
 app.get("/", (req, res) => {
   res.json({
-    message: "Welcome to the API",
-    version: "1.0.0",
-    author: "Rehan Qasim"
+    message: "API is working!"
   });
 });
 
