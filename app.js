@@ -3,18 +3,6 @@ const cors = require("cors");
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Enhanced CORS configuration with more origins
-const allowedOrigins = [
-  'http://localhost:5500', 
-  'https://rehanqasim_render.surge.sh',
-  'http://127.0.0.1:5500',
-  'http://localhost:3000',
-  'http://localhost:8080',
-  // Add the actual origin you're using for your frontend
-  'https://rehanqasim-render.surge.sh', // Note: with and without underscore
-  'https://rehanqasim.github.io'
-];
-
 // Middleware - completely open CORS for development
 app.use(cors({
   origin: true, // Allow all origins in development
