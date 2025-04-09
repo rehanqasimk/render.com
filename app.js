@@ -113,32 +113,101 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-// Initialize database tables
+// Initialize database tables with improved error handling
 app.get("/api/init-db", async (req, res) => {
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // First check connection
+    const connectionTest = await pool.query('SELECT NOW() as time')
+      .catch(err => {
+        throw new Error(`Connection test failed: ${err.message}`);
+      });
+    console.log("Database connection verified:", connectionTest.rows[0].time);
     
-    // Check if table is empty and add sample data
-    const count = await pool.query('SELECT COUNT(*) FROM users');
-    if (parseInt(count.rows[0].count) === 0) {
+    // Create users table with more detailed error handling
+    try {
       await pool.query(`
-        INSERT INTO users (name, email) VALUES 
-        ('John Doe', 'john@example.com'),
-        ('Jane Smith', 'jane@example.com')
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          email VARCHAR(100) UNIQUE NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
       `);
+      console.log("Users table created or already exists");
+    } catch (tableError) {
+      throw new Error(`Failed to create users table: ${tableError.message}`);
     }
     
-    res.json({ message: "Database initialized successfully" });
+    // Check if table is empty and add sample data
+    try {
+      const count = await pool.query('SELECT COUNT(*) FROM users');
+      console.log(`Current user count: ${count.rows[0].count}`);
+      
+      if (parseInt(count.rows[0].count) === 0) {
+        await pool.query(`
+          INSERT INTO users (name, email) VALUES 
+          ('John Doe', 'john@example.com'),
+          ('Jane Smith', 'jane@example.com')
+        `);
+        console.log("Sample users added");
+      }
+    } catch (dataError) {
+      throw new Error(`Failed to add sample data: ${dataError.message}`);
+    }
+    
+    res.json({ 
+      message: "Database initialized successfully",
+      connection: "OK",
+      database_url: process.env.DATABASE_URL ? 
+        "Using remote database (URL provided)" : 
+        "Using local database"
+    });
   } catch (error) {
     console.error("Database initialization error:", error);
-    res.status(500).json({ error: "Database initialization failed" });
+    res.status(500).json({ 
+      error: "Database initialization failed", 
+      details: error.message,
+      database_url_provided: !!process.env.DATABASE_URL
+    });
+  }
+});
+
+// Add database diagnostic endpoint
+app.get("/api/db-test", async (req, res) => {
+  const diagnostics = {
+    connection: "Untested",
+    ssl_mode: process.env.DATABASE_URL ? "Enabled" : "Disabled",
+    db_url_present: !!process.env.DATABASE_URL,
+    tests: {}
+  };
+
+  try {
+    // Test basic connection
+    try {
+      const result = await pool.query('SELECT 1 as connection_test');
+      diagnostics.connection = "Success";
+      diagnostics.tests.basic_query = "Passed";
+    } catch (err) {
+      diagnostics.connection = "Failed";
+      diagnostics.tests.basic_query = `Failed: ${err.message}`;
+    }
+
+    // Test if schema permissions work
+    try {
+      await pool.query('CREATE TABLE IF NOT EXISTS connection_test (id SERIAL PRIMARY KEY, test_col TEXT)');
+      diagnostics.tests.schema_permissions = "Passed";
+    } catch (err) {
+      diagnostics.tests.schema_permissions = `Failed: ${err.message}`;
+    }
+
+    // Return all diagnostic info
+    res.json(diagnostics);
+  } catch (error) {
+    console.error("Database diagnostic error:", error);
+    res.status(500).json({ 
+      error: "Database diagnostic failed", 
+      message: error.message 
+    });
   }
 });
 
